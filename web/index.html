@@ -75,7 +75,7 @@
     <input id="loginUser" type="text" autocomplete="username">
     <label for="loginPass">Password</label>
     <input id="loginPass" type="password" autocomplete="current-password">
-    <button class="primary" type="button" onclick="doLogin()">Log in</button>
+        <button id="loginBtn" class="primary" type="button" onclick="doLogin()">Log in</button>
     <div id="loginError" class="hint"></div>
 
     <div id="tokenEntry" class="hidden">
@@ -95,8 +95,11 @@
     <label for="class">Class name</label>
     <input id="class" type="text" placeholder="e.g. 5A or Physics" autocomplete="off">
 
-    <label for="video">Classroom video</label>
-    <input id="video" type="file" accept="video/*" capture="environment">
+        <label>Record a classroom video</label>
+    <input id="video" type="file" accept="video/*" capture="environment" class="hidden">
+    <input id="videoGallery" type="file" accept="video/*" class="hidden">
+    <button class="ghost" type="button" onclick="$('video').click()">📷 Record with phone camera</button>
+    <button class="ghost" type="button" onclick="$('videoGallery').click()">🖼️ Choose from gallery / files</button>
     <div id="fileInfo" class="hint"></div>
 
     <button id="uploadBtn" class="primary" type="button" onclick="startUpload()">🎥 Upload &amp; Mark Attendance</button>
@@ -145,7 +148,7 @@ async function init() {
       else { showTokenEntry(); }
     }
   } else {
-    showUpload();  // open server (local LAN)
+    showOpenNotice();  // server has no login configured: warn before open upload
   }
 }
 
@@ -191,6 +194,41 @@ function showUpload() {
   $("who").textContent = LOGIN_MODE ? "teacher" : "token";
 }
 
+// The server reports auth_required=false when NEITHER teacher creds nor a
+// master ACCESS_TOKEN are configured. On a public host (Railway) that leaves
+// the upload completely open — surface a clear warning instead of silently
+// jumping to the upload form. A local teacher can still proceed for testing.
+function showOpenNotice() {
+  $("loginCard").classList.add("hidden");
+  $("uploadCard").classList.add("hidden");
+  $("userBar").classList.add("hidden");
+  $("statusCard").classList.remove("hidden");
+  $("resultCard").classList.add("hidden");
+  const msg = "🔓 This server has login DISABLED — neither " +
+    "ATTENDANCE_TEACHER_USERNAME/ATTENDANCE_TEACHER_PASSWORD nor " +
+    "ATTENDANCE_ACCESS_TOKEN is set. Uploads are open to anyone until you " +
+    "configure teacher credentials in your hosting variables and redeploy.";
+  $("statusText").textContent = msg;
+  $("statusText").style.color = "#fbbf24";
+
+  // Allow local/LAN testing even when auth is off, but make it explicit.
+  let btn = $("openContinueBtn");
+  if (!btn) {
+    btn = document.createElement("button");
+    btn.id = "openContinueBtn";
+    btn.className = "ghost";
+    btn.type = "button";
+    btn.textContent = "Proceed to upload anyway (local only)";
+    btn.onclick = forceUpload;
+    $("statusCard").appendChild(btn);
+  }
+}
+
+function forceUpload() {
+  $("statusCard").classList.add("hidden");
+  showUpload();
+}
+
 async function doLogin() {
   const u = $("loginUser").value.trim();
   const p = $("loginPass").value;
@@ -232,10 +270,13 @@ async function logout() {
   if (LOGIN_MODE) showLogin(); else showTokenEntry();
 }
 
-$("video").addEventListener("change", () => {
-  const f = $("video").files[0];
+$("video").addEventListener("change", onFilePicked);
+$("videoGallery").addEventListener("change", onFilePicked);
+
+function onFilePicked() {
+  const f = $("video").files[0] || $("videoGallery").files[0];
   $("fileInfo").textContent = f ? `${f.name} · ${(f.size/1048576).toFixed(1)} MB` : "";
-});
+}
 
 function setStatus(text, isError) {
   $("statusCard").classList.remove("hidden");
@@ -246,7 +287,7 @@ function setStatus(text, isError) {
 
 async function startUpload() {
   const cls = $("class").value.trim();
-  const file = $("video").files[0];
+    const file = $("video").files[0] || $("videoGallery").files[0];
   if (!cls) { alert("Please enter the class name first."); return; }
   if (!file) { alert("Please record / choose a video first."); return; }
 
