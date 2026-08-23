@@ -1,0 +1,17 @@
+# Keep the Docker build context small and secret-free
+.git
+venv
+__pycache__
+**/__pycache__
+*.pyc
+.env
+secrets/*.json
+
+# Large data not needed to run the server
+data/videos
+data/reports/*.json
+data/students/*/
+raw_student_photos
+student_photos
+test
+*.mp4
