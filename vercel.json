@@ -1,0 +1,19 @@
+{
+  "version": 3,
+  "public": true,
+  "cleanOutputs": true,
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://<YOUR-RAILWAY-BACKEND>.railway.app/api/$1"
+    },
+    {
+      "source": "/health",
+      "destination": "https://<YOUR-RAILWAY-BACKEND>.railway.app/health"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/web/$1"
+    }
+  ]
+}

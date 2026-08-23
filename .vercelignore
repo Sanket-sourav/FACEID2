@@ -1,0 +1,18 @@
+# Vercel builds from the repo root. Keep secrets + large backend assets out of
+# the deployment context so they can never be served from the static frontend.
+secrets/
+data/
+src/
+models/
+Dockerfile
+.dockerignore
+.python-version
+requirements*.txt
+build-embeddings*
+**/__pycache__
+**/*.pkl
+**/*.mp4
+**/*.mov
+**/*.mkv
+.venv
+venv

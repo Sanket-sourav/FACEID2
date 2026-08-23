@@ -59,6 +59,11 @@
   #userBar { max-width: 480px; margin: 0 auto 16px; text-align: center;
           font-size: .9rem; color: var(--muted); }
   #userBar a { color: var(--bad); }
+   @media print {
+     header, #loginCard, #uploadCard, #statusCard, #userBar, #printBtn, .spinner { display: none !important; }
+     #resultCard { border: none; padding: 0; background: #fff; }
+     body { background: #fff; color: #111; }
+   }
 </style>
 </head>
 <body>
@@ -76,6 +81,10 @@
     <label for="loginPass">Password</label>
     <input id="loginPass" type="password" autocomplete="current-password">
         <button id="loginBtn" class="primary" type="button" onclick="doLogin()">Log in</button>
+    <div style="margin-top:12px;text-align:center;">
+      <button class="ghost" type="button" onclick="guestMode()">Use as Guest</button>
+      <div class="hint">No credentials? Skip login and browse as Guest.</div>
+    </div>
     <div id="loginError" class="hint"></div>
 
     <div id="tokenEntry" class="hidden">
@@ -118,12 +127,18 @@
       <tbody id="resultBody"></tbody>
     </table>
     <div id="sheetInfo"></div>
+    <button id="printBtn" class="ghost" type="button" onclick="window.print()">🖨️ Print attendance</button>
   </section>
 </main>
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+// Base URL of the backend API. Empty string => same origin (local dev / co-hosted deploy).
+// On Vercel, set window.ATTENDANCE_API_BASE to your backend URL (vercel.json also
+// proxies /api/* and /health to the backend), so the static frontend can reach it.
+const API_BASE = (typeof window !== "undefined" && window.ATTENDANCE_API_BASE) || "";
+const api = path => (API_BASE ? API_BASE.replace(/\/+$/, "") : "") + path;
 
 let SAVED_TOKEN = "";
 let LOGIN_MODE = false;   // true = teacher login configured, false = open/master-token
@@ -134,7 +149,7 @@ function authHeaders() {
 
 async function init() {
   let h = {};
-  try { h = await (await fetch("/health")).json(); } catch (e) { /* offline */ }
+  try { h = await (await fetch(api("/health"))).json(); } catch (e) { /* offline */ }
   if (h.auth_required) {
     if (h.login_configured) {
       LOGIN_MODE = true;
@@ -154,7 +169,7 @@ async function init() {
 
 async function validate(token) {
   try {
-    const r = await fetch("/api/roster", { headers: { Authorization: "Bearer " + token } });
+    const r = await fetch(api("/api/roster"), { headers: { Authorization: "Bearer " + token } });
     return r.ok;
   } catch (e) { return false; }
 }
@@ -211,22 +226,29 @@ function showOpenNotice() {
   $("statusText").textContent = msg;
   $("statusText").style.color = "#fbbf24";
 
-  // Allow local/LAN testing even when auth is off, but make it explicit.
-  let btn = $("openContinueBtn");
+  // When the server runs open-mode (no auth configured), anyone can upload.
+  // Offer a clearly-labelled Guest entry rather than silently jumping to upload.
+  let btn = $("guestBtn");
   if (!btn) {
     btn = document.createElement("button");
-    btn.id = "openContinueBtn";
+    btn.id = "guestBtn";
     btn.className = "ghost";
     btn.type = "button";
-    btn.textContent = "Proceed to upload anyway (local only)";
-    btn.onclick = forceUpload;
+    btn.textContent = "Continue as Guest";
+    btn.onclick = guestMode;
     $("statusCard").appendChild(btn);
   }
 }
 
-function forceUpload() {
-  $("statusCard").classList.add("hidden");
+// Guest path: no credentials, no token. Works when the backend is open-mode;
+// if the backend requires auth, the upload will simply 401 and the UI prompts
+// the teacher to log in instead.
+function guestMode() {
+  LOGIN_MODE = false;
+  SAVED_TOKEN = "";
+  if (typeof localStorage !== "undefined") localStorage.removeItem("attendance_token");
   showUpload();
+  $("who").textContent = "guest";
 }
 
 async function doLogin() {
@@ -238,7 +260,7 @@ async function doLogin() {
     const fd = new URLSearchParams();
     fd.append("username", u);
     fd.append("password", p);
-    const r = await fetch("/api/login", { method: "POST", body: fd });
+    const r = await fetch(api("/api/login"), { method: "POST", body: fd });
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || "Login failed");
     setTokenAndShow(d.token);
@@ -262,7 +284,7 @@ function submitToken() {
 async function logout() {
   try {
     if (SAVED_TOKEN) {
-      await fetch("/api/logout", { method: "POST", headers: authHeaders() });
+      await fetch(api("/api/logout"), { method: "POST", headers: authHeaders() });
     }
   } catch (e) { /* ignore */ }
   SAVED_TOKEN = "";
@@ -302,7 +324,7 @@ async function startUpload() {
 
   let jobId = null;
   try {
-    const res = await fetch("/api/upload", { method: "POST", body: form, headers: authHeaders() });
+    const res = await fetch(api("/api/upload"), { method: "POST", body: form, headers: authHeaders() });
     const data = await res.json();
     if (res.status === 401) { setStatus("Session expired — please log in again.", true); logout(); return; }
     if (!res.ok) throw new Error(data.detail || "Upload failed");
@@ -321,7 +343,7 @@ async function startUpload() {
 async function pollJob(jobId) {
   while (true) {
     try {
-      const res = await fetch("/api/jobs/" + jobId, { headers: authHeaders() });
+      const res = await fetch(api("/api/jobs/" + jobId), { headers: authHeaders() });
       if (res.status === 401) { setStatus("Session expired — please log in again.", true); logout(); return; }
       if (!res.ok) throw new Error("fetch failed");
       const j = await res.json();
