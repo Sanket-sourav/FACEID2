@@ -26,7 +26,7 @@ and replace `<YOUR-RAILWAY-BACKEND>.railway.app` with your real Railway app doma
 {
   "version": 2,
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "https://attendance-api.up.railway.app/api/$1" },
+    { "source": "/api/:path*", "destination": "https://attendance-api.up.railway.app/api/:path*" },
     { "source": "/health",    "destination": "https://attendance-api.up.railway.app/health" }
   ]
 }
