@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>Attendance — Record &amp; Upload</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --ink:#e2e8f0; --muted:#94a3b8;
+          --accent:#38bdf8; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background: var(--bg); color: var(--ink); min-height: 100vh; padding: 16px; }
+  header { text-align: center; margin: 18px 0 22px; }
+  header h1 { font-size: 1.5rem; letter-spacing: .3px; }
+  header .sub { color: var(--muted); font-size: .9rem; margin-top: 6px; }
+  .card { background: var(--card); border: 1px solid #334155; border-radius: 16px;
+          padding: 18px; margin: 0 auto 16px; max-width: 480px; }
+  label { display: block; font-size: .82rem; color: var(--muted);
+          text-transform: uppercase; letter-spacing: .8px; margin: 14px 0 6px; }
+  input[type=text], input[type=password] { width: 100%; padding: 12px 14px; font-size: 1.05rem;
+          border-radius: 10px; border: 1px solid #475569; background: #0b1220;
+          color: var(--ink); outline: none; }
+  input[type=text]:focus, input[type=password]:focus { border-color: var(--accent); }
+  input[type=file] { width: 100%; padding: 14px; font-size: .95rem;
+          border: 1.5px dashed #475569; border-radius: 10px; background: #0b1220;
+          color: var(--muted); }
+  input[type=file]::file-selector-button { margin-right: 12px; padding: 8px 14px;
+          border: none; border-radius: 8px; background: #334155; color: var(--ink);
+          font-weight: 600; cursor: pointer; }
+  .hint { font-size: .85rem; color: var(--muted); margin-top: 8px; }
+  #loginError { font-size: .85rem; margin-top: 8px; }
+  #loginError.err { color: var(--bad); }
+  button { width: 100%; margin-top: 18px; padding: 15px; font-size: 1.05rem;
+          font-weight: 700; border: none; border-radius: 12px; cursor: pointer; }
+  button.primary { color: #082f49; background: var(--accent); }
+  button.ghost { color: var(--ink); background: #334155; }
+  button:disabled { opacity: .55; cursor: not-allowed; }
+  .hidden { display: none; }
+  #statusText { font-size: 1rem; line-height: 1.5; color: var(--muted); }
+  .spinner { width: 42px; height: 42px; margin: 18px auto 4px; border-radius: 50%;
+          border: 4px solid #334155; border-top-color: var(--accent);
+          animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: .92rem; }
+  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid #334155; }
+  th { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .6px; }
+  .mark { font-weight: 800; font-size: 1.05rem; }
+  .present { color: var(--ok); } .absent { color: var(--bad); } .review { color: var(--warn); }
+  #summary { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+  .pill { background: #0b1220; border: 1px solid #334155; border-radius: 999px;
+          padding: 6px 14px; font-size: .85rem; color: var(--muted); }
+  .pill b { color: var(--ink); }
+  #sheetInfo { margin-top: 14px; padding: 11px 13px; border-radius: 10px;
+          background: #0b1220; font-size: .88rem; line-height: 1.5; color: var(--muted); }
+  #sheetInfo.ok { border: 1px solid var(--ok); color: var(--ok); }
+  #sheetInfo.err { border: 1px solid var(--bad); color: var(--bad); }
+  a { color: var(--accent); }
+  #userBar { max-width: 480px; margin: 0 auto 16px; text-align: center;
+          font-size: .9rem; color: var(--muted); }
+  #userBar a { color: var(--bad); }
+</style>
+</head>
+<body>
+<header>
+  <h1>📋 Face Attendance</h1>
+  <p class="sub">Record the classroom video with your phone camera and upload it.
+     Attendance is then written to the master Google Sheet.</p>
+</header>
+
+<main>
+  <section id="loginCard" class="card hidden">
+    <h2 id="loginHeading" style="font-size:1.1rem; margin-bottom:4px;">Teacher login</h2>
+    <label for="loginUser">Username</label>
+    <input id="loginUser" type="text" autocomplete="username">
+    <label for="loginPass">Password</label>
+    <input id="loginPass" type="password" autocomplete="current-password">
+    <button class="primary" type="button" onclick="doLogin()">Log in</button>
+    <div id="loginError" class="hint"></div>
+
+    <div id="tokenEntry" class="hidden">
+      <hr style="border-color:#334155; margin:18px 0;">
+      <p class="hint">This server does not have a teacher account. Enter the server
+        access token below if you were given one.</p>
+      <label for="token">Access token</label>
+      <input id="token" type="password" autocomplete="off">
+      <button class="primary" type="button" onclick="submitToken()">Continue</button>
+    </div>
+  </section>
+
+  <div id="userBar" class="hidden">Signed in as <b id="who"></b>
+    · <a href="#" onclick="logout();return false;">Log out</a></div>
+
+  <section id="uploadCard" class="card hidden">
+    <label for="class">Class name</label>
+    <input id="class" type="text" placeholder="e.g. 5A or Physics" autocomplete="off">
+
+    <label for="video">Classroom video</label>
+    <input id="video" type="file" accept="video/*" capture="environment">
+    <div id="fileInfo" class="hint"></div>
+
+    <button id="uploadBtn" class="primary" type="button" onclick="startUpload()">🎥 Upload &amp; Mark Attendance</button>
+  </section>
+
+  <section id="statusCard" class="card hidden">
+    <div id="statusText">Starting…</div>
+    <div class="spinner"></div>
+  </section>
+
+  <section id="resultCard" class="card hidden">
+    <h2 style="font-size:1.1rem; margin-bottom: 4px;">Attendance result</h2>
+    <div id="summary"></div>
+    <table>
+      <thead><tr><th>Student</th><th>Result</th><th>Mark</th><th>Confidence</th></tr></thead>
+      <tbody id="resultBody"></tbody>
+    </table>
+    <div id="sheetInfo"></div>
+  </section>
+</main>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+let SAVED_TOKEN = "";
+let LOGIN_MODE = false;   // true = teacher login configured, false = open/master-token
+
+function authHeaders() {
+  return SAVED_TOKEN ? { Authorization: "Bearer " + SAVED_TOKEN } : {};
+}
+
+async function init() {
+  let h = {};
+  try { h = await (await fetch("/health")).json(); } catch (e) { /* offline */ }
+  if (h.auth_required) {
+    if (h.login_configured) {
+      LOGIN_MODE = true;
+      const t = localStorage.getItem("attendance_token") || "";
+      if (t && await validate(t)) { setTokenAndShow(t); }
+      else { showLogin(); }
+    } else {
+      // master-token only: show the token entry directly
+      const t = localStorage.getItem("attendance_token") || "";
+      if (t && await validate(t)) { setTokenAndShow(t); }
+      else { showTokenEntry(); }
+    }
+  } else {
+    showUpload();  // open server (local LAN)
+  }
+}
+
+async function validate(token) {
+  try {
+    const r = await fetch("/api/roster", { headers: { Authorization: "Bearer " + token } });
+    return r.ok;
+  } catch (e) { return false; }
+}
+
+function setTokenAndShow(token) {
+  SAVED_TOKEN = token;
+  localStorage.setItem("attendance_token", token);
+  showUpload();
+}
+
+function showLogin() {
+  $("loginCard").classList.remove("hidden");
+  $("loginHeading").classList.remove("hidden");
+  $("loginUser").classList.remove("hidden");
+  $("loginPass").classList.remove("hidden");
+  $("loginBtn").classList.remove("hidden");
+  $("tokenEntry").classList.add("hidden");
+  $("uploadCard").classList.add("hidden");
+  $("userBar").classList.add("hidden");
+}
+function showTokenEntry() {
+  $("loginCard").classList.remove("hidden");
+  $("loginHeading").classList.add("hidden");
+  $("loginUser").classList.add("hidden");
+  $("loginPass").classList.add("hidden");
+  $("loginBtn").classList.add("hidden");
+  $("tokenEntry").classList.remove("hidden");
+  $("uploadCard").classList.add("hidden");
+  $("userBar").classList.add("hidden");
+}
+function showUpload() {
+  $("loginCard").classList.add("hidden");
+  $("userBar").classList.remove("hidden");
+  $("uploadCard").classList.remove("hidden");
+  $("statusCard").classList.add("hidden");
+  $("resultCard").classList.add("hidden");
+  $("who").textContent = LOGIN_MODE ? "teacher" : "token";
+}
+
+async function doLogin() {
+  const u = $("loginUser").value.trim();
+  const p = $("loginPass").value;
+  const err = $("loginError");
+  if (!u || !p) { err.textContent = "Enter your username and password."; err.classList.add("err"); return; }
+  try {
+    const fd = new URLSearchParams();
+    fd.append("username", u);
+    fd.append("password", p);
+    const r = await fetch("/api/login", { method: "POST", body: fd });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || "Login failed");
+    setTokenAndShow(d.token);
+    err.textContent = "";
+    err.classList.remove("err");
+  } catch (e) {
+    err.textContent = e.message;
+    err.classList.add("err");
+  }
+}
+
+function submitToken() {
+  const t = $("token").value.trim();
+  if (!t) { alert("Enter the access token."); return; }
+  (async () => {
+    if (await validate(t)) { setTokenAndShow(t); }
+    else { alert("That token was not accepted."); }
+  })();
+}
+
+async function logout() {
+  try {
+    if (SAVED_TOKEN) {
+      await fetch("/api/logout", { method: "POST", headers: authHeaders() });
+    }
+  } catch (e) { /* ignore */ }
+  SAVED_TOKEN = "";
+  localStorage.removeItem("attendance_token");
+  if (LOGIN_MODE) showLogin(); else showTokenEntry();
+}
+
+$("video").addEventListener("change", () => {
+  const f = $("video").files[0];
+  $("fileInfo").textContent = f ? `${f.name} · ${(f.size/1048576).toFixed(1)} MB` : "";
+});
+
+function setStatus(text, isError) {
+  $("statusCard").classList.remove("hidden");
+  const t = $("statusText");
+  t.textContent = text;
+  t.style.color = isError ? "#ef4444" : "#94a3b8";
+}
+
+async function startUpload() {
+  const cls = $("class").value.trim();
+  const file = $("video").files[0];
+  if (!cls) { alert("Please enter the class name first."); return; }
+  if (!file) { alert("Please record / choose a video first."); return; }
+
+  const btn = $("uploadBtn");
+  btn.disabled = true;
+  $("resultCard").classList.add("hidden");
+
+  const form = new FormData();
+  form.append("class_name", cls);
+  form.append("video", file);
+  setStatus("Uploading video…");
+
+  let jobId = null;
+  try {
+    const res = await fetch("/api/upload", { method: "POST", body: form, headers: authHeaders() });
+    const data = await res.json();
+    if (res.status === 401) { setStatus("Session expired — please log in again.", true); logout(); return; }
+    if (!res.ok) throw new Error(data.detail || "Upload failed");
+    jobId = data.job_id;
+  } catch (e) {
+    setStatus("Upload failed: " + e.message, true);
+    btn.disabled = false;
+    return;
+  }
+
+  setStatus("Processing video with face recognition… This can take a while. Keep this page open.");
+  await pollJob(jobId);
+  btn.disabled = false;
+}
+
+async function pollJob(jobId) {
+  while (true) {
+    try {
+      const res = await fetch("/api/jobs/" + jobId, { headers: authHeaders() });
+      if (res.status === 401) { setStatus("Session expired — please log in again.", true); logout(); return; }
+      if (!res.ok) throw new Error("fetch failed");
+      const j = await res.json();
+
+      if (j.status === "error") {
+        setStatus("Processing failed: " + (j.error || "unknown error"), true);
+        return;
+      }
+      if (j.status === "done") { renderResult(j); return; }
+
+      if (j.stats && j.stats.frames_processed) {
+        setStatus(`Processed ${j.stats.frames_processed} frames so far…`);
+      }
+    } catch (e) { /* transient network error: just keep polling */ }
+    await sleep(3000);
+  }
+}
+
+function renderResult(j) {
+  const rows = j.decisions || [];
+  const stats = j.stats || {};
+  const n = rows.length;
+  const present = rows.filter(r => r.status === "PRESENT").length;
+  const review = rows.filter(r => r.status === "NEEDS_REVIEW" || r.status === "PRESENT_REVIEW").length;
+  const absent = n - present - review;
+
+  $("statusCard").classList.add("hidden");
+  $("resultCard").classList.remove("hidden");
+
+  $("summary").innerHTML =
+    `<span class="pill">Class: <b>${esc(j.class_name || "—")}</b></span>` +
+    `<span class="pill">Present: <b>${present}</b></span>` +
+    `<span class="pill">Absent: <b>${absent}</b></span>` +
+    `<span class="pill">Review: <b>${review}</b></span>` +
+    (stats.elapsed_sec ? `<span class="pill">⏱ ${esc(stats.elapsed_sec)}s</span>` : "");
+
+  const body = rows.map(r => {
+    const cls = r.status === "PRESENT" ? "present" :
+               (r.status === "NEEDS_REVIEW" || r.status === "PRESENT_REVIEW") ? "review" : "absent";
+    const mark = r.status === "PRESENT" ? "P" :
+                 r.status === "NOT_OBSERVED" ? "A" : "?";
+    const conf = r.evidence_count ? (r.confidence*100).toFixed(0)+"%" : "—";
+    return `<tr><td>${esc(r.student_name)}</td><td>${esc(r.status)}</td>` +
+           `<td class="mark ${cls}">${mark}</td><td>${conf}</td></tr>`;
+  }).join("");
+  $("resultBody").innerHTML = body;
+
+  let sheetHtml = "";
+  if (j.sheet) {
+    sheetHtml = `<div class="ok">✅ Written to Google Sheet “${esc(j.sheet.tab)}” → column <b>${esc(j.sheet.column)}</b> (header “${esc(j.sheet.header)}”), ${j.sheet.written} students.</div>`;
+  } else if (j.sheet_error) {
+    sheetHtml = `<div class="err">⚠️ Recognition finished but the Google Sheet was not updated: ${esc(j.sheet_error)}. See README / secrets/README.md.</div>`;
+  } else {
+    sheetHtml = `<div class="err">⚠️ No Google Sheet sync attempted — configure ATTENDANCE_SHEET_ID and the service account key.</div>`;
+  }
+  $("sheetInfo").innerHTML = sheetHtml;
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+init();
+</script>
+</body>
+</html>

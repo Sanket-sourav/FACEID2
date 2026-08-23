@@ -1,0 +1,15 @@
+venv/
+__pycache__/
+*.pyc
+data/students/*/
+!data/students/.gitkeep
+# embeddings.pkl must be uploaded so Railway has the face database
+# (the enrollment photos themselves stay private/local)
+data/videos/*.mp4
+data/videos/*.mov
+data/videos/uploads/
+data/reports/*.json
+!data/reports/.gitkeep
+secrets/*.json
+.env
+.DS_Store
