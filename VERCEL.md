@@ -6,29 +6,60 @@ backend (InsightFace pipeline) keeps running on Railway.
 
 ## One-step deploy
 
-1. Push this repo to GitHub (or import the repo directly into Vercel).
-2. In the Vercel dashboard, create a new project from the repo.
-3. Set **Root Directory** to `web` (so only the frontend is served), **or** leave it
-   at the repo root — `vercel.json` + `.vercelignore` already scope the deploy to `web/`
-   and keep `secrets/`, `data/`, `src/` out.
-4. Vercel auto-detects a static site (no build command needed) and deploys.
+1. Log in to [vercel.com](https://vercel.com/) -> Dashboard -> New Project.
+2. Import your Git repo: **GitHub -> `Sanket-sourav/FACEID2`**.
+3. On the **"Configure Project"** screen set:
+   - **Root Directory** = `web`  (so only the frontend is served; secrets/, data/, src/
+     are excluded automatically)
+   - **Build Command** = _(leave blank; Vercel auto-detects a static site)_
+   - **Output Directory** = _(leave blank)_
+4. Click **Deploy**. First deploy is instant (one static file).
 
-## Point the frontend at your backend
+## Point the frontend at your backend (replace the placeholder once)
 
-Edit the `destination` URLs in the root `vercel.json` and replace
-`<YOUR-RAILWAY-BACKEND>.railway.app` with your actual Railway app URL, then redeploy.
+Edit [`web/vercel.json`](https://github.com/Sanket-sourav/FACEID2/blob/main/web/vercel.json)
+and replace `<YOUR-RAILWAY-BACKEND>.railway.app` with your real Railway app domain
+(found in your Railway project -> Settings -> Public Domain), e.g.
+`https://attendance-api.up.railway.app`:
 
-- `vercel.json` rewrites `/api/*` and `/health` to your backend (server-side proxy),
-  so the frontend's relative calls work from `your-app.vercel.app`.
-- If you prefer to set the backend at runtime instead, add the env var
-  `ATTENDANCE_API_BASE` (absolute URL) — the frontend reads
-  `window.ATTENDANCE_API_BASE` automatically. Leave it unset to use same-origin
-  (relative) calls (local dev / co-hosted).
+```jsonc
+{
+  "version": 3,
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://attendance-api.up.railway.app/api/$1" },
+    { "source": "/health",    "destination": "https://attendance-api.up.railway.app/health" }
+  ]
+}
+```
 
-## Login vs Guest
+These **rewrites** are Vercel server-side proxies: the browser still calls
+`/api/...` and `/health`, which Vercel forwards to your Railway backend. Push to
+`main` to redeploy; then test:
 
-- Teacher login uses your backend `ATTENDANCE_TEACHER_USERNAME`/`ATTENDANCE_TEACHER_PASSWORD`.
-- "Use as Guest" skips login (no token). Works fully when the backend runs in
-  open mode; if the backend requires auth, the upload will 401 and prompt to log in.
-- After results render, the "🖨️ Print attendance" button and an `@media print`
-  stylesheet produce a printer-friendly attendance sheet.
+```bash
+curl https://YOUR-APP.vercel.app/health   # should return your backend JSON
+```
+
+## Configure backend auth (so the login page appears)
+
+Set these on your Railway project (Railway -> Settings -> Variables):
+- `ATTENDANCE_TEACHER_USERNAME`, `ATTENDANCE_TEACHER_PASSWORD` (enables login)
+- `ATTENDANCE_SHEET_ID`, `ATTENDANCE_CREDENTIALS_JSON` (writes to your Sheet)
+
+When those teacher creds are set, `/health` returns `login_configured: true` and
+the frontend shows the **Teacher login** card. (Left unset, the frontend shows the
+open-mode "Continue as Guest" banner instead.)
+
+## Login vs Guest vs Print
+
+- **Login** -> POST /api/login -> bearer token -> take attendance (upload video).
+- **Use as Guest** -> skip login, upload straight to the open-mode backend.
+- After results render, **Print attendance** (and the @media print stylesheet)
+  produce a printer-friendly attendance sheet (roster + summary + Sheet status).
+
+## Advanced: set the backend URL at runtime instead of editing vercel.json
+
+`web/index.html` also honours `window.ATTENDANCE_API_BASE` (absolute URL, overrides
+the rewrites). This needs a build step to inject it on Vercel static hosting, so
+the `vercel.json` rewrite above is the recommended default. Leave it unset to use
+same-origin (relative) calls (local dev / co-hosted).
