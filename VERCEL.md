@@ -24,7 +24,7 @@ and replace `<YOUR-RAILWAY-BACKEND>.railway.app` with your real Railway app doma
 
 ```jsonc
 {
-  "version": 3,
+  "version": 2,
   "rewrites": [
     { "source": "/api/(.*)", "destination": "https://attendance-api.up.railway.app/api/$1" },
     { "source": "/health",    "destination": "https://attendance-api.up.railway.app/health" }
