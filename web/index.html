@@ -137,8 +137,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // Base URL of the backend API. Empty string => same origin (local dev / co-hosted deploy).
 // On Vercel, set window.ATTENDANCE_API_BASE to your backend URL (vercel.json also
 // proxies /api/* and /health to the backend), so the static frontend can reach it.
-const API_BASE = (typeof window !== "undefined" && window.ATTENDANCE_API_BASE) || "";
-const api = path => (API_BASE ? API_BASE.replace(/\/+$/, "") : "") + path;
+// If undefined, fall back to the Railway backend directly so video uploads bypass
+// Vercel's 1 MB body-size limit entirely (login, roster, jobs, and uploads all go
+// straight to Railway over HTTPS).
+const DEFAULT_BACKEND = "https://faceidattendence-production.up.railway.app";
+const API_BASE = (typeof window !== "undefined" && window.ATTENDANCE_API_BASE) || DEFAULT_BACKEND;
+const api = path => API_BASE.replace(/\/+$/, "") + path;
 
 let SAVED_TOKEN = "";
 let LOGIN_MODE = false;   // true = teacher login configured, false = open/master-token
@@ -327,10 +331,10 @@ async function startUpload() {
         const res = await fetch(api("/api/upload"), { method: "POST", body: form, headers: authHeaders() });
     const text = await res.text();
     let data;
-        try { data = JSON.parse(text); }
+            try { data = JSON.parse(text); }
     catch (e) { throw new Error("Upload failed: server returned an invalid response (" + res.status + "). " + text.substring(0, 200)); }
     if (res.status === 401) { setStatus("Session expired — please log in again.", true); logout(); return; }
-    if (!res.ok) throw new Error(data.detail || "Upload failed");
+    if (!res.ok) throw new Error((data && data.detail) || ("Upload failed with HTTP " + res.status));
     jobId = data.job_id;
   } catch (e) {
     setStatus("Upload failed: " + e.message, true);

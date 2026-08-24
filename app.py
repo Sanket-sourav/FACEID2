@@ -22,6 +22,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, Header, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from src import config
@@ -31,6 +32,15 @@ from src.services.face_recognizer import FaceRecognizer
 WEB_DIR = Path(__file__).resolve().parent / "web"
 
 app = FastAPI(title="Classroom Attendance API", version="2.0.0")
+
+# Allow your Vercel-hosted frontend to call this Railway API directly.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://faceidattendence.vercel.app"],
+    allow_credentials=True,
+    allow_headers=["*"],
+    methods=["*"],
+)
 
 # ---------------------------------------------------------------------------
 # Heavy components are loaded once per process and reused across uploads. The
