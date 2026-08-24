@@ -20,14 +20,14 @@ backend (InsightFace pipeline) keeps running on Railway.
 Edit [`web/vercel.json`](https://github.com/Sanket-sourav/FACEID2/blob/main/web/vercel.json)
 and replace `<YOUR-RAILWAY-BACKEND>.railway.app` with your real Railway app domain
 (found in your Railway project -> Settings -> Public Domain), e.g.
-`https://attendance-api.up.railway.app`:
+`https://web-production-0263f.up.railway.app`:
 
 ```jsonc
 {
   "version": 2,
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://attendance-api.up.railway.app/api/:path*" },
-    { "source": "/health",    "destination": "https://attendance-api.up.railway.app/health" }
+    { "source": "/api/:path*", "destination": "https://web-production-0263f.up.railway.app/api/:path*" },
+    { "source": "/health",    "destination": "https://web-production-0263f.up.railway.app/health" }
   ]
 }
 ```

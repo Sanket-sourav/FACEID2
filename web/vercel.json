@@ -3,11 +3,11 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://<YOUR-RAILWAY-BACKEND>.railway.app/api/:path*"
+      "destination": "https://web-production-0263f.up.railway.app/api/:path*"
     },
     {
       "source": "/health",
-      "destination": "https://<YOUR-RAILWAY-BACKEND>.railway.app/health"
+      "destination": "https://web-production-0263f.up.railway.app/health"
     }
   ]
 }
