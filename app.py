@@ -15,6 +15,8 @@ or directly with:
     uvicorn app:app --host 0.0.0.0 --port 8000
 """
 
+import multiprocessing as mp
+import os
 import secrets
 import threading
 import time
@@ -26,7 +28,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from src import config
-from src.services.face_detector import FaceDetector
 from src.services.face_recognizer import FaceRecognizer
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -44,20 +45,14 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# Heavy components are loaded once per process and reused across uploads. The
-# pipeline access is serialised with a lock because InsightFace apps are not
-# thread-safe and a classroom workload has at most one active video anyway.
+# The recognizer is loaded once per process and reused for roster lookups.
+# Actual video processing (below) runs in its own subprocess per job instead,
+# serialised by _pipeline_lock, so a hung or crashed video can be killed on a
+# timeout without ever taking the server down with it.
 # ---------------------------------------------------------------------------
-_detector = None
 _recognizer = None
 _pipeline_lock = threading.Lock()
-
-
-def get_detector():
-    global _detector
-    if _detector is None:
-        _detector = FaceDetector()
-    return _detector
+PIPELINE_TIMEOUT_SEC = int(os.environ.get("ATTENDANCE_PIPELINE_TIMEOUT_SEC", "240"))
 
 
 def get_recognizer():
@@ -159,6 +154,19 @@ def _job_snapshot(job_id: str):
         return dict(job) if job else None
 
 
+def _pipeline_worker(video_path: str, out_queue: "mp.Queue") -> None:
+    """Runs in its own process so a video that hangs cv2/onnxruntime can be
+    killed outright — a plain thread can't be forced to give up a stuck
+    native call, and everyone would be blocked behind _pipeline_lock forever."""
+    try:
+        from src.pipeline import process_video
+
+        decisions, stats = process_video(video_path, verbose=False)
+        out_queue.put(("ok", decisions, stats))
+    except Exception as exc:
+        out_queue.put(("error", f"{type(exc).__name__}: {exc}", None))
+
+
 def _run_job(job_id: str, video_path: str, class_name: str):
     _commit(job_id, status="processing")
     sheet_result = None
@@ -167,17 +175,32 @@ def _run_job(job_id: str, video_path: str, class_name: str):
     stats = None
     error = None
     try:
-        from src.pipeline import process_video
-
         with _pipeline_lock:
-            # verbose=False keeps the server log clean; progress is reported
-            # via the job object instead.
-            decisions, stats = process_video(
-                video_path,
-                verbose=False,
-                detector=get_detector(),
-                recognizer=get_recognizer(),
-            )
+            ctx = mp.get_context("fork")
+            out_queue = ctx.Queue()
+            proc = ctx.Process(target=_pipeline_worker, args=(video_path, out_queue), daemon=True)
+            proc.start()
+            proc.join(PIPELINE_TIMEOUT_SEC)
+
+            if proc.is_alive():
+                proc.terminate()
+                proc.join(5)
+                if proc.is_alive():
+                    proc.kill()
+                    proc.join()
+                raise TimeoutError(
+                    f"Video processing timed out after {PIPELINE_TIMEOUT_SEC}s. "
+                    "The file may be corrupted or in an unsupported format — "
+                    "try re-recording, or re-export as a standard H.264 .mp4 and upload again."
+                )
+            if out_queue.empty():
+                raise RuntimeError(
+                    f"Video processing crashed without a result (worker exit code {proc.exitcode})."
+                )
+            kind, payload, worker_stats = out_queue.get()
+            if kind == "error":
+                raise RuntimeError(payload)
+            decisions, stats = payload, worker_stats
 
         try:
             from src.sheets.sync import write_attendance

@@ -352,6 +352,10 @@ async function pollJob(jobId) {
     try {
       const res = await fetch(api("/api/jobs/" + jobId), { headers: authHeaders() });
       if (res.status === 401) { setStatus("Session expired — please log in again.", true); logout(); return; }
+      if (res.status === 404) {
+        setStatus("The server lost track of this job (it may have restarted). Please upload the video again.", true);
+        return;
+      }
       if (!res.ok) throw new Error("fetch failed");
       const j = await res.json();
 
