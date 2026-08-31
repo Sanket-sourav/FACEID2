@@ -27,7 +27,11 @@ class FaceDetector:
     def __init__(self, model_pack: str = config.MODEL_PACK, ctx_id: int = -1):
         from insightface.app import FaceAnalysis
 
-        self._app = FaceAnalysis(name=model_pack)
+        # buffalo_l bundles 5 models; we only ever read bbox/kps/embedding, so skip
+        # loading the other 3 (landmark_3d_68, landmark_2d_106, genderage) — each is
+        # its own onnxruntime session, and Railway's container is memory-tight enough
+        # that loading all 5 has been observed to get OOM-killed mid-startup.
+        self._app = FaceAnalysis(name=model_pack, allowed_modules=["detection", "recognition"])
         # ctx_id=-1 -> CPU. Set to 0 for GPU if you have onnxruntime-gpu installed.
         # det_thresh is passed explicitly so config.MIN_DETECTION_CONFIDENCE is the
         # single source of truth (InsightFace's own default here is 0.5).
