@@ -140,7 +140,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // If undefined, fall back to the Railway backend directly so video uploads bypass
 // Vercel's 1 MB body-size limit entirely (login, roster, jobs, and uploads all go
 // straight to Railway over HTTPS).
-const DEFAULT_BACKEND = "https://faceidattendence-production.up.railway.app";
+const DEFAULT_BACKEND = "https://web-production-c05b9.up.railway.app";
 const API_BASE = (typeof window !== "undefined" && window.ATTENDANCE_API_BASE) || DEFAULT_BACKEND;
 const api = path => API_BASE.replace(/\/+$/, "") + path;
 

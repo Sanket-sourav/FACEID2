@@ -36,10 +36,11 @@ app = FastAPI(title="Classroom Attendance API", version="2.0.0")
 # Allow your Vercel-hosted frontend to call this Railway API directly.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://faceidattendence.vercel.app"],
+    allow_origins=["https://faceid-2.vercel.app", "https://faceid2.vercel.app"],
+    allow_origin_regex=r"https://faceid-?2.*\.vercel\.app",
     allow_credentials=True,
     allow_headers=["*"],
-    methods=["*"],
+    allow_methods=["*"],
 )
 
 # ---------------------------------------------------------------------------
